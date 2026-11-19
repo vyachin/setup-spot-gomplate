@@ -1,0 +1,84 @@
+name: Test setup-spot-gomplate
+
+on:
+  push:
+    paths:
+      - "action.yml"
+      - "install.sh"
+      - ".github/workflows/test-action.yml"
+  pull_request:
+    paths:
+      - "action.yml"
+      - "install.sh"
+      - ".github/workflows/test-action.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Install on ${{ matrix.os }} (cache=${{ matrix.cache }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cache: "true"
+          - os: macos-latest
+            cache: "false"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install spot and gomplate
+        id: setup
+        uses: ./
+        with:
+          spot-version: v1.20.1
+          gomplate-version: v5.3.1
+          cache: ${{ matrix.cache }}
+
+      - name: Check outputs, PATH and versions
+        shell: bash
+        env:
+          SPOT_PATH: ${{ steps.setup.outputs.spot-path }}
+          GOMPLATE_PATH: ${{ steps.setup.outputs.gomplate-path }}
+        run: |
+          set -euo pipefail
+          test -x "$SPOT_PATH"
+          test -x "$GOMPLATE_PATH"
+          test "$(command -v spot)" = "$SPOT_PATH"
+          test "$(command -v gomplate)" = "$GOMPLATE_PATH"
+          spot --version | grep -F '1.20.1'
+          gomplate --version | grep -F '5.3.1'
+
+      - name: Run the installer a second time (idempotency)
+        id: second
+        uses: ./
+        with:
+          spot-version: v1.20.1
+          gomplate-version: v5.3.1
+          cache: ${{ matrix.cache }}
+
+      - name: Paths must not change between runs
+        shell: bash
+        env:
+          FIRST_SPOT: ${{ steps.setup.outputs.spot-path }}
+          SECOND_SPOT: ${{ steps.second.outputs.spot-path }}
+        run: |
+          set -euo pipefail
+          test "$FIRST_SPOT" = "$SECOND_SPOT"
+          spot --version
+          gomplate --version
+
+      - name: The installed tools must actually work
+        shell: bash
+        run: |
+          set -euo pipefail
+          gomplate --input-dir examples/hello/spot \
+            --include '*.tmpl' \
+            --output-map '{{ .in | strings.TrimSuffix ".tmpl" }}'
+          test -s examples/hello/spot/inventory.yml
+          test -s examples/hello/spot/nginx-hello.conf

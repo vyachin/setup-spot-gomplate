@@ -1,0 +1,136 @@
+name: Hello example (spot + gomplate)
+
+on:
+  push:
+    paths:
+      - "examples/hello/**"
+      - ".github/workflows/hello.yml"
+      - ".github/actions/setup-spot-gomplate/**"
+  pull_request:
+    paths:
+      - "examples/hello/**"
+      - ".github/workflows/hello.yml"
+      - ".github/actions/setup-spot-gomplate/**"
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy to the server configured in the HELLO_* repository variables.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hello-example-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Build and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install spot and gomplate
+        uses: ./
+
+      - name: Render templates with gomplate
+        env:
+          VERSION: ${{ github.sha }}
+          SERVER_NAME: hello.test
+          HTTP_PORT: "80"
+          PHP_FPM_SOCK: /run/php/php8.2-fpm.sock
+        run: bash examples/hello/scripts/render.sh
+
+      - name: Build release archive
+        run: bash examples/hello/scripts/build-release.sh "${{ github.sha }}" "$RUNNER_TEMP/hello.tar.gz"
+
+      - name: Validate the playbook (dry run)
+        working-directory: examples/hello/spot
+        env:
+          SOURCE: ${{ runner.temp }}/hello.tar.gz
+          VERSION: ${{ github.sha }}
+          SERVER_NAME: hello.test
+          HTTP_PORT: "80"
+          PHP_FPM_SOCK: /run/php/php8.2-fpm.sock
+        run: |
+          spot --no-color --local --dry \
+            --playbook spot.yml \
+            --task=deploy \
+            --target=hello \
+            --inventory=inventory.yml \
+            --env-file config.yml
+
+  sandbox:
+    name: Deploy to a disposable Docker host
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install spot and gomplate
+        uses: ./
+
+      - name: Deploy twice, check zero downtime and cron
+        run: bash examples/hello/test/sandbox.sh
+
+  deploy:
+    name: Deploy to the real server
+    needs: [validate, sandbox]
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEPLOY_HOST: ${{ vars.HELLO_DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.HELLO_DEPLOY_PORT || '22' }}
+      DEPLOY_USER: ${{ vars.HELLO_DEPLOY_USER || 'deploy' }}
+      SERVER_NAME: ${{ vars.HELLO_SERVER_NAME || 'hello.test' }}
+      HTTP_PORT: ${{ vars.HELLO_HTTP_PORT || '80' }}
+      PHP_FPM_SOCK: ${{ vars.HELLO_PHP_FPM_SOCK || '/run/php/php8.2-fpm.sock' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install spot and gomplate
+        uses: ./
+
+      - name: Prepare deploy key
+        env:
+          DEPLOY_KEY: ${{ secrets.HELLO_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::The HELLO_DEPLOY_KEY secret is not configured."
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/hello_deploy_key"
+          chmod 600 "$RUNNER_TEMP/hello_deploy_key"
+          test -s "$RUNNER_TEMP/hello_deploy_key"
+
+      - name: Render, build and deploy
+        env:
+          SOURCE: ${{ runner.temp }}/hello.tar.gz
+          VERSION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::error::The HELLO_DEPLOY_HOST repository variable is not configured."
+            exit 1
+          fi
+          bash examples/hello/scripts/render.sh
+          bash examples/hello/scripts/build-release.sh "$VERSION" "$SOURCE"
+          cd examples/hello/spot
+          spot --no-color \
+            --playbook spot.yml \
+            --task=deploy \
+            --target=hello \
+            --inventory=inventory.yml \
+            --env-file config.yml \
+            --key "$RUNNER_TEMP/hello_deploy_key"
+
+      - name: Remove deploy key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/hello_deploy_key"

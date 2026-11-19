@@ -1,0 +1,54 @@
+name: Setup spot and gomplate
+description: Install pinned spot and gomplate releases, verify checksums and add them to PATH.
+branding:
+  icon: terminal
+  color: gray-dark
+
+inputs:
+  spot-version:
+    description: spot release tag, for example v1.20.1.
+    required: false
+    default: v1.20.1
+  gomplate-version:
+    description: gomplate release tag, for example v5.3.1.
+    required: false
+    default: v5.3.1
+  cache:
+    description: Reuse downloaded binaries between workflow runs (keyed by version and runner platform).
+    required: false
+    default: "true"
+
+outputs:
+  spot-path:
+    description: Absolute path to the installed spot binary.
+    value: ${{ steps.install.outputs.spot-path }}
+  gomplate-path:
+    description: Absolute path to the installed gomplate binary.
+    value: ${{ steps.install.outputs.gomplate-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore cached binaries
+      id: cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/spot-gomplate
+        key: spot-gomplate-${{ runner.os }}-${{ runner.arch }}-spot-${{ inputs.spot-version }}-gomplate-${{ inputs.gomplate-version }}
+
+    - name: Install spot and gomplate
+      id: install
+      shell: bash
+      env:
+        SPOT_VERSION: ${{ inputs.spot-version }}
+        GOMPLATE_VERSION: ${{ inputs.gomplate-version }}
+        INSTALL_DIR: ${{ runner.temp }}/spot-gomplate
+      run: |
+        set -euo pipefail
+        bash "$GITHUB_ACTION_PATH/install.sh"
+        {
+          echo "spot-path=$INSTALL_DIR/spot"
+          echo "gomplate-path=$INSTALL_DIR/gomplate"
+        } >> "$GITHUB_OUTPUT"
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"

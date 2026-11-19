@@ -1,0 +1,39 @@
+# Rendered by gomplate during deploy (see examples/hello/spot/spot.yml).
+# app release: {{ getenv "RELEASE_PATH" "not-deployed" }}
+# app version: {{ getenv "VERSION" "dev" }}
+server {
+    listen {{ getenv "HTTP_PORT" "80" }};
+    listen [::]:{{ getenv "HTTP_PORT" "80" }};
+    server_name {{ getenv "SERVER_NAME" "hello.test" }};
+
+    # The release is switched by atomically replacing this symlink, so no
+    # nginx reload is required to publish new application code.
+    root {{ getenv "DEPLOY_TO" "/var/www/hello" }}/{{ getenv "CURRENT_DIR" "current" }};
+    index index.php;
+
+    add_header X-Hello-Release "{{ getenv "VERSION" "dev" }}" always;
+    add_header Cache-Control "no-store" always;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    location = /index.php {
+        try_files $uri =404;
+
+        include        fastcgi_params;
+        fastcgi_param  SCRIPT_FILENAME $realpath_root/index.php;
+        fastcgi_param  SERVER_NAME     $host;
+        fastcgi_pass   unix:{{ getenv "PHP_FPM_SOCK" "/run/php/php8.2-fpm.sock" }};
+    }
+
+    location ~* \.php(?:/|$) {
+        return 404;
+    }
+}

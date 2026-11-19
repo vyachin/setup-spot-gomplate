@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install spot and gomplate
-        uses: vyachin/setup-spot-gomplate@main
+        uses: vyachin/setup-spot-gomplate@v0.0.1
         with:
           spot-version: v1.20.1
           gomplate-version: v5.3.1
@@ -30,12 +30,8 @@ jobs:
           gomplate --version
 ```
 
-The tag has not been created yet, so the example uses `@main`. For stable usage, create a tag
-and pin `@v0.0.1` or a commit SHA:
-
-```yaml
-- uses: vyachin/setup-spot-gomplate@v0.0.1
-```
+Pin the action to a release tag (or to a commit SHA for stricter supply-chain control);
+the examples use `v0.0.1`.
 
 ### In the same repository
 
@@ -52,7 +48,7 @@ steps:
 
 ```yaml
 - name: Install spot and gomplate
-  uses: vyachin/setup-spot-gomplate@main
+  uses: vyachin/setup-spot-gomplate@v0.0.1
   with:
     spot-version: v1.20.1
     gomplate-version: v5.3.1
@@ -86,7 +82,7 @@ env:
   GOMPLATE_VERSION: v5.3.1
 
 steps:
-  - uses: vyachin/setup-spot-gomplate@main
+  - uses: vyachin/setup-spot-gomplate@v0.0.1
     with:
       spot-version: ${{ env.SPOT_VERSION }}
       gomplate-version: ${{ env.GOMPLATE_VERSION }}

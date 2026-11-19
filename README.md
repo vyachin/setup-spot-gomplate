@@ -1,15 +1,15 @@
 # setup-spot-gomplate
 
-Composite GitHub Action, которая ставит закреплённые версии
-[spot](https://github.com/umputun/spot) и [gomplate](https://github.com/hairyhenderson/gomplate)
-для использования в CI/CD.
+Composite GitHub Action that installs pinned versions of
+[spot](https://github.com/umputun/spot) and [gomplate](https://github.com/hairyhenderson/gomplate)
+for use in CI/CD.
 
-Версии задаются параметрами, бинарники проверяются по SHA-256 из релиза, кэшируются между
-запусками и добавляются в `PATH`.
+Versions are selected through inputs. The binaries are verified against the SHA-256 checksums
+published with the release, cached between workflow runs and added to `PATH`.
 
-## Подключение
+## Usage
 
-### Из другого репозитория
+### From another repository
 
 ```yaml
 jobs:
@@ -30,14 +30,14 @@ jobs:
           gomplate --version
 ```
 
-Сейчас тег не создан, поэтому в примере указан `@main`. Для стабильного использования
-поставьте тег и замените ссылку на `@v0.0.1` или на commit SHA:
+The tag has not been created yet, so the example uses `@main`. For stable usage, create a tag
+and pin `@v0.0.1` or a commit SHA:
 
 ```yaml
 - uses: vyachin/setup-spot-gomplate@v0.0.1
 ```
 
-### В этом же репозитории
+### In the same repository
 
 ```yaml
 steps:
@@ -48,7 +48,7 @@ steps:
       gomplate-version: v5.3.1
 ```
 
-### Пример использования в деплое
+### Deploy example
 
 ```yaml
 - name: Install spot and gomplate
@@ -78,7 +78,7 @@ steps:
       --key "$RUNNER_TEMP/deploy_key"
 ```
 
-Версии удобно держать в `env`, чтобы не дублировать их по job-ам:
+Keeping the versions in `env` avoids repeating them in every job:
 
 ```yaml
 env:
@@ -92,39 +92,39 @@ steps:
       gomplate-version: ${{ env.GOMPLATE_VERSION }}
 ```
 
-## Входы
+## Inputs
 
-| Вход | По умолчанию | Назначение |
+| Input | Default | Description |
 | --- | --- | --- |
-| `spot-version` | `v1.20.1` | Тег релиза spot. |
-| `gomplate-version` | `v5.3.1` | Тег релиза gomplate. |
-| `cache` | `true` | Кэшировать бинарники между запусками (`false`, если кэш не нужен). |
+| `spot-version` | `v1.20.1` | spot release tag. |
+| `gomplate-version` | `v5.3.1` | gomplate release tag. |
+| `cache` | `true` | Cache the binaries between runs (`false` to disable). |
 
-## Выходы
+## Outputs
 
-| Выход | Назначение |
+| Output | Description |
 | --- | --- |
-| `spot-path` | Абсолютный путь к `spot`. |
-| `gomplate-path` | Абсолютный путь к `gomplate`. |
+| `spot-path` | Absolute path to the `spot` binary. |
+| `gomplate-path` | Absolute path to the `gomplate` binary. |
 
-Оба бинарника также добавляются в `PATH`.
+Both binaries are also added to `PATH`.
 
-## Что делает action
+## What the action does
 
-- Определяет платформу по `uname -s`/`uname -m`: Linux и macOS, x86_64 и arm64.
-- Скачивает файлы выбранного релиза с GitHub.
-- Сверяет SHA-256 с checksums из этого же релиза.
-- Кладёт бинарники в `$RUNNER_TEMP/spot-gomplate` и пишет каталог в `$GITHUB_PATH`.
-- Идемпотентен: если нужные версии уже установлены (например, после restore кэша),
-  повторно ничего не скачивает.
-- Кэш (`actions/cache`) имеет ключ из ОС, архитектуры и обеих версий, поэтому смена версии
-  автоматически инвалидирует его.
+- Detects the platform with `uname -s`/`uname -m`: Linux and macOS, x86_64 and arm64.
+- Downloads the selected release assets from GitHub.
+- Verifies SHA-256 against the checksums published with that release.
+- Installs the binaries into `$RUNNER_TEMP/spot-gomplate` and adds the directory to `$GITHUB_PATH`.
+- Is idempotent: if the requested versions are already installed (for example, after a cache
+  restore), it does not download them again.
+- The `actions/cache` key includes the OS, architecture and both versions, so changing a version
+  invalidates the cache automatically.
 
-Windows не поддерживается.
+Windows is not supported.
 
-## Локальный запуск
+## Local usage
 
-`install.sh` не зависит от GitHub Actions и работает на Linux/macOS:
+`install.sh` does not depend on GitHub Actions and works on Linux/macOS:
 
 ```bash
 SPOT_VERSION=v1.20.1 \
@@ -133,10 +133,10 @@ INSTALL_DIR="$HOME/.local/bin" \
   bash ./install.sh
 ```
 
-## Обновление версий
+## Updating versions
 
-1. Поменяйте `spot-version` / `gomplate-version` в workflow.
-2. Убедитесь, что в релизе есть ожидаемые имена файлов:
-   - spot: `spot_<версия>_<платформа>.tar.gz` и `spot_<версия без v>_checksums.txt`;
-   - gomplate: `gomplate_<платформа>` и `checksums-<версия>_sha256.txt`.
-3. Action упадёт, если контрольная сумма не совпадёт или файла нет.
+1. Change `spot-version` / `gomplate-version` in the workflow.
+2. Make sure the release contains the expected asset names:
+   - spot: `spot_<version>_<platform>.tar.gz` and `spot_<version without v>_checksums.txt`;
+   - gomplate: `gomplate_<platform>` and `checksums-<version>_sha256.txt`.
+3. The action fails if a checksum does not match or an asset is missing.

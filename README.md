@@ -1,12 +1,15 @@
 # setup-spot-gomplate
 
-Composite GitHub Action, которая ставит закреплённые версии [spot](https://github.com/umputun/spot)
-и [gomplate](https://github.com/hairyhenderson/gomplate) для использования в CI/CD.
+Composite GitHub Action, которая ставит закреплённые версии
+[spot](https://github.com/umputun/spot) и [gomplate](https://github.com/hairyhenderson/gomplate)
+для использования в CI/CD.
 
-Установка вынесена из workflow в отдельный action: версии задаются параметрами, бинарники
-проверяются по SHA-256 из релиза, кэшируются между запусками и попадают в `PATH`.
+Версии задаются параметрами, бинарники проверяются по SHA-256 из релиза, кэшируются между
+запусками и добавляются в `PATH`.
 
-## Использование
+## Подключение
+
+### Из другого репозитория
 
 ```yaml
 jobs:
@@ -16,15 +19,64 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install spot and gomplate
-        uses: vyachin/setup-spot-gomplate@v0.0.1
+        uses: vyachin/setup-spot-gomplate@main
         with:
           spot-version: v1.20.1
           gomplate-version: v5.3.1
 
-      - run: spot --version && gomplate --version
+      - name: Check tools
+        run: |
+          spot --version
+          gomplate --version
 ```
 
-В workflow этого же репозитория — `uses: ./`.
+Сейчас тег не создан, поэтому в примере указан `@main`. Для стабильного использования
+поставьте тег и замените ссылку на `@v0.0.1` или на commit SHA:
+
+```yaml
+- uses: vyachin/setup-spot-gomplate@v0.0.1
+```
+
+### В этом же репозитории
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+  - uses: ./
+    with:
+      spot-version: v1.20.1
+      gomplate-version: v5.3.1
+```
+
+### Пример использования в деплое
+
+```yaml
+- name: Install spot and gomplate
+  uses: vyachin/setup-spot-gomplate@main
+  with:
+    spot-version: v1.20.1
+    gomplate-version: v5.3.1
+
+- name: Render deploy templates
+  run: |
+    gomplate \
+      --input-dir deploy \
+      --include '*.tmpl' \
+      --output-map '{{ .in | strings.TrimSuffix ".tmpl" }}'
+
+- name: Deploy with spot
+  working-directory: deploy
+  env:
+    SOURCE: ${{ runner.temp }}/release.tar.gz
+    VERSION: ${{ github.sha }}
+  run: |
+    spot --no-color \
+      --playbook spot.yml \
+      --task=deploy \
+      --target=web \
+      --env-file config.yml \
+      --key "$RUNNER_TEMP/deploy_key"
+```
 
 Версии удобно держать в `env`, чтобы не дублировать их по job-ам:
 
@@ -34,19 +86,21 @@ env:
   GOMPLATE_VERSION: v5.3.1
 
 steps:
-  - uses: vyachin/setup-spot-gomplate@v0.0.1
+  - uses: vyachin/setup-spot-gomplate@main
     with:
       spot-version: ${{ env.SPOT_VERSION }}
       gomplate-version: ${{ env.GOMPLATE_VERSION }}
 ```
 
-## Входы и выходы
+## Входы
 
 | Вход | По умолчанию | Назначение |
 | --- | --- | --- |
 | `spot-version` | `v1.20.1` | Тег релиза spot. |
 | `gomplate-version` | `v5.3.1` | Тег релиза gomplate. |
 | `cache` | `true` | Кэшировать бинарники между запусками (`false`, если кэш не нужен). |
+
+## Выходы
 
 | Выход | Назначение |
 | --- | --- |
@@ -85,40 +139,4 @@ INSTALL_DIR="$HOME/.local/bin" \
 2. Убедитесь, что в релизе есть ожидаемые имена файлов:
    - spot: `spot_<версия>_<платформа>.tar.gz` и `spot_<версия без v>_checksums.txt`;
    - gomplate: `gomplate_<платформа>` и `checksums-<версия>_sha256.txt`.
-3. Прогоните [test-action.yml](.github/workflows/test-action.yml): action упадёт, если
-   контрольная сумма не совпадёт или файла нет.
-
-## Состав репозитория
-
-| Путь | Назначение |
-| --- | --- |
-| [action.yml](action.yml) | Метаданные action: входы, выходы, кэш, запуск установки. |
-| [install.sh](install.sh) | Определение платформы, скачивание, проверка checksums, установка. |
-| [.github/workflows/test-action.yml](.github/workflows/test-action.yml) | Тесты action на Linux/macOS, с кэшем и без. |
-| [.github/workflows/hello.yml](.github/workflows/hello.yml) | Пример CI/CD: деплой hello-приложения. |
-| [examples/hello](examples/hello/README.md) | PHP-приложение, zero-downtime деплой, nginx, cron. |
-
-## Тесты
-
-`test-action.yml` проверяет:
-
-- установку на `ubuntu-latest` (с кэшем) и `macos-latest` (без кэша);
-- outputs `spot-path` / `gomplate-path` и наличие команд в `PATH`;
-- точные версии spot и gomplate;
-- повторный запуск (идемпотентность);
-- реальный вызов `gomplate` на шаблонах из `examples/hello/spot`.
-
-`hello.yml` дополнительно поднимает одноразовый Docker-хост и проверяет сам деплой:
-zero downtime, nginx-конфиг и cron.
-
-## Релизы
-
-Для использования из другого репозитория поставьте тег:
-
-```bash
-git tag -a v0.0.1 -m "setup-spot-gomplate v0.0.1"
-git push origin v0.0.1
-```
-
-Для максимальной безопасности в чужом CI можно пинить не тег, а commit SHA:
-`vyachin/setup-spot-gomplate@<sha>`.
+3. Action упадёт, если контрольная сумма не совпадёт или файла нет.

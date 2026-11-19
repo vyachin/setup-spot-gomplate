@@ -1,8 +1,0 @@
----
-# Rendered by gomplate from inventory.yml.tmpl.
-# DEPLOY_HOST / DEPLOY_PORT / DEPLOY_USER come from the environment.
-groups:
-  hello:
-    - host: "{{ getenv "DEPLOY_HOST" "127.0.0.1" }}"
-      port: {{ getenv "DEPLOY_PORT" "22" }}
-      user: "{{ getenv "DEPLOY_USER" "deploy" }}"

@@ -74,11 +74,12 @@ jobs:
           gomplate --version
 
       - name: The installed tools must actually work
+        working-directory: examples/hello/spot
         shell: bash
         run: |
           set -euo pipefail
-          gomplate --input-dir examples/hello/spot \
+          gomplate --input-dir . \
             --include '*.tmpl' \
             --output-map '{{ .in | strings.TrimSuffix ".tmpl" }}'
-          test -s examples/hello/spot/inventory.yml
-          test -s examples/hello/spot/nginx-hello.conf
+          test -s inventory.yml
+          test -s nginx-hello.conf

@@ -5,12 +5,14 @@ on:
     paths:
       - "examples/hello/**"
       - ".github/workflows/hello.yml"
-      - ".github/actions/setup-spot-gomplate/**"
+      - "action.yml"
+      - "install.sh"
   pull_request:
     paths:
       - "examples/hello/**"
       - ".github/workflows/hello.yml"
-      - ".github/actions/setup-spot-gomplate/**"
+      - "action.yml"
+      - "install.sh"
   workflow_dispatch:
     inputs:
       deploy:
@@ -47,6 +49,12 @@ jobs:
       - name: Build release archive
         run: bash examples/hello/scripts/build-release.sh "${{ github.sha }}" "$RUNNER_TEMP/hello.tar.gz"
 
+      - name: Generate temporary SSH key
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/hello-key" "$RUNNER_TEMP/hello-key.pub"
+          ssh-keygen -q -t rsa -b 2048 -N '' -f "$RUNNER_TEMP/hello-key"
+
       - name: Validate the playbook (dry run)
         working-directory: examples/hello/spot
         env:
@@ -61,7 +69,8 @@ jobs:
             --task=deploy \
             --target=hello \
             --inventory=inventory.yml \
-            --env-file config.yml
+            --env-file config.yml \
+            --key "$RUNNER_TEMP/hello-key"
 
   sandbox:
     name: Deploy to a disposable Docker host
